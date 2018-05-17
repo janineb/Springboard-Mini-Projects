@@ -98,20 +98,83 @@ the guest user's ID is always 0. Include in your output the name of the
 facility, the name of the member formatted as a single column, and the cost.
 Order by descending cost, and do not use any subqueries. */
 
-SELECT starttime, f.name,  CONCAT(m.firstname, ' ', m.surname) AS member_name,
-CASE WHEN m.memid = 0 THEN guestcost * slots 
-ELSE membercost*slots END AS cost
+SELECT
+starttime,
+f.name,
+CONCAT( m.firstname, ' ', m.surname) AS member_name,
+CASE WHEN m.memid = 0 THEN guestcost * slots ELSE membercost*slots END AS cost
 FROM Members AS m
 JOIN Bookings AS b ON m.memid = b.memid
 JOIN Facilities AS f ON b.facid = f.facid
-WHERE starttime LIKE '2012-09-14%'
-HAVING cost > 30
-ORDER BY cost DESC
+WHERE
+starttime LIKE '2012-09-14%'
+and ( CASE WHEN m.memid = 0 THEN guestcost * slots ELSE membercost*slots END ) > 30
+ORDER BY ( CASE WHEN m.memid = 0 THEN guestcost * slots ELSE membercost*slots END ) DESC
+
 
 /* Q9: This time, produce the same result as in Q8, but using a subquery. */
 
+SELECT sub.starttime, sub.name, sub.member_name, sub.cost
+FROM
+	(SELECT b.starttime, f.name,
+     CONCAT(m.firstname, ' ', m.surname) AS member_name,
+     CASE WHEN m.memid = 0 
+	THEN f.guestcost * b.slots 
+	ELSE f.membercost * b.slots END AS cost
+	FROM Members AS m
+	JOIN Bookings AS b ON m.memid = b.memid
+	JOIN Facilities AS f ON b.facid = f.facid) as sub
+WHERE starttime LIKE '2012-09-14%'
+AND sub.cost > 30
+ORDER BY cost DESC
 
+/* Note to self - key is creating the inner query first as a 
+standalone whose table can then be queried by the outer query.*/
 
 /* Q10: Produce a list of facilities with a total revenue less than 1000.
 The output of facility name and total revenue, sorted by revenue. Remember
 that there's a different cost for guests and members! */
+
+SELECT sub2.name, sub2.revenue
+FROM
+
+	(SELECT sub.name, SUM( sub.cost ) AS revenue
+		FROM (
+
+			SELECT b.starttime, f.name, CONCAT(m.firstname,  ' ', m.surname ) AS member_name, 
+			CASE WHEN m.memid =0
+			THEN f.guestcost * b.slots
+			ELSE f.membercost * b.slots
+			END AS cost
+			FROM Members AS m
+			JOIN Bookings AS b ON m.memid = b.memid
+			JOIN Facilities AS f ON b.facid = f.facid
+			) AS sub
+	GROUP BY sub.name
+	ORDER BY sub.name) AS sub2
+WHERE sub2.revenue <1000
+GROUP BY sub2.revenue
+ORDER BY sub2.revenue
+	
+/* Below includes the 3 monthly maintenance fees for this period.*/
+
+SELECT sub2.name, sub2.revenue
+FROM
+
+	(SELECT sub.name, SUM( sub.cost ) - 3*monthlymaintenance AS revenue
+		FROM (
+
+			SELECT f.monthlymaintenance, b.starttime, f.name, CONCAT(m.firstname,  ' ', m.surname ) AS member_name, 
+			CASE WHEN m.memid =0
+			THEN f.guestcost * b.slots
+			ELSE f.membercost * b.slots
+			END AS cost
+			FROM Members AS m
+			JOIN Bookings AS b ON m.memid = b.memid
+			JOIN Facilities AS f ON b.facid = f.facid
+			) AS sub
+	GROUP BY sub.name
+	ORDER BY sub.name) AS sub2
+WHERE sub2.revenue <1000
+GROUP BY sub2.revenue
+ORDER BY sub2.revenue
